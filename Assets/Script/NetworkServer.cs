@@ -5,6 +5,8 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.IO;
 using UnityEngine.UI;
+using System.Linq;
+using System;
 
 public class NetworkServer : MonoBehaviour
 {
@@ -13,6 +15,7 @@ public class NetworkServer : MonoBehaviour
     int unreliableChannelID;
     int hostID;
     int socketPort = 5491;
+    string stateIn = "";
 
     // Start is called before the first frame update
     void Start()
@@ -23,7 +26,6 @@ public class NetworkServer : MonoBehaviour
         unreliableChannelID = config.AddChannel(QosType.Unreliable);
         HostTopology topology = new HostTopology(config, maxConnections);
         hostID = NetworkTransport.AddHost(topology, socketPort, null);
-
     }
 
     // Update is called once per frame
@@ -68,6 +70,50 @@ public class NetworkServer : MonoBehaviour
     private void ProcessRecievedMsg(string msg, int id)
     {
         Debug.Log("msg recieved = " + msg + ".  connection id = " + id);
+
+        var path = Directory.GetCurrentDirectory();
+        string[] lines = System.IO.File.ReadAllLines(path + @"/UserData.txt");
+        string[] msgSplit = msg.Split(',');
+        ChangeState(msg);
+        switch (stateIn)
+        {
+            case "Signup":
+                StreamWriter File = new StreamWriter("UserData.txt");
+                File.Write(msgSplit[1] + "," + msgSplit[2]);
+                File.Close();
+                break;
+            case "Login":
+                foreach (string Login in lines)
+                {
+                    if (Login != msg)
+                    {
+                        SendMessageToClient("Wrong Username/Password", id);
+                    }
+                    else
+                    {
+                        SendMessageToClient("Logged in!", id);
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void ChangeState(string State)
+    {
+        switch (State)
+        {
+            case "SignUp":
+                stateIn = State;
+                break;
+            case "Loging":
+                stateIn = State;
+                break;
+            default:
+                break;
+
+        }
     }
 
 }
