@@ -5,8 +5,6 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.IO;
 using UnityEngine.UI;
-using System.Linq;
-using System;
 
 public class NetworkServer : MonoBehaviour
 {
@@ -70,32 +68,61 @@ public class NetworkServer : MonoBehaviour
     private void ProcessRecievedMsg(string msg, int id)
     {
         Debug.Log("msg recieved = " + msg + ".  connection id = " + id);
-
+        
         var path = Directory.GetCurrentDirectory();
         string[] lines = System.IO.File.ReadAllLines(path + @"/UserData.txt");
         string[] msgSplit = msg.Split(',');
-        ChangeState(msg);
+        ChangeState(msgSplit[0]);
+        Debug.Log(stateIn);
+        string UserData = msgSplit[1] + "," + msgSplit[2];
         switch (stateIn)
         {
             case "Signup":
-                StreamWriter File = new StreamWriter("UserData.txt");
-                File.Write(msgSplit[1] + "," + msgSplit[2]);
-                File.Close();
+                foreach (var Accounts in lines)
+                {
+                    string[] temp = Accounts.Split(',');
+                    string Username = temp[0];
+                    if (Username == msgSplit[2])
+                    {
+                        SendMessageToClient("Username is already used", id);
+                        break;
+                    }
+                    else
+                    {
+                        StreamWriter File = new StreamWriter("UserData.txt", true);
+                        File.WriteLine(UserData);
+                        File.Close();
+                        Debug.Log("Signing in...");
+                        SendMessageToClient("Account Created", id);
+                        break;
+                    }
+                }
                 break;
             case "Login":
                 foreach (string Login in lines)
                 {
-                    if (Login != msg)
+                    string[] temp = Login.Split(',');
+                    string Username = temp[0];
+                    string Password = temp[1];
+                    if (Username != msgSplit[1])
                     {
-                        SendMessageToClient("Wrong Username/Password", id);
+                        SendMessageToClient("Wrong Username", id);
+                        Debug.Log("Wrong Username");
                     }
-                    else
+                    else if (Password != msgSplit[2])
+                    {
+                        SendMessageToClient("Wrong Password", id);
+                        Debug.Log("Wrong Password");
+                    }
+                    else if (Login == UserData)
                     {
                         SendMessageToClient("Logged in!", id);
+                        Debug.Log("Loging in...");
                     }
                 }
                 break;
             default:
+                Debug.Log("Nothing");
                 break;
         }
     }
@@ -104,11 +131,11 @@ public class NetworkServer : MonoBehaviour
     {
         switch (State)
         {
-            case "SignUp":
-                stateIn = State;
+            case "True":
+                stateIn = "Signup";
                 break;
-            case "Loging":
-                stateIn = State;
+            case "False":
+                stateIn = "Login";
                 break;
             default:
                 break;
