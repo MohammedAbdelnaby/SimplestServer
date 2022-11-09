@@ -139,7 +139,6 @@ public class NetworkServer : MonoBehaviour
                 break;
             default:
                 break;
-
         }
     }
 
