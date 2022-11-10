@@ -68,7 +68,45 @@ public class NetworkServer : MonoBehaviour
     private void ProcessRecievedMsg(string msg, int id)
     {
         Debug.Log("msg recieved = " + msg + ".  connection id = " + id);
-        
+        string[] msgSplit = msg.Split(',');
+        if (msgSplit[0] == "Create" || msgSplit[0] == "join")
+        {
+            CreateAndJoinRooms(msg, id);
+        }
+        else
+        {
+            SigninAndSignUp(msg, id);
+        }
+    }
+
+    private void CreateAndJoinRooms(string msg, int id)
+    {
+        var path = Directory.GetCurrentDirectory();
+        string[] lines = System.IO.File.ReadAllLines(path + @"/RoomData.txt");
+        string[] msgSplit = msg.Split(',');
+
+        switch (msgSplit[0])
+        {
+            case "Create":
+                foreach (string Room in lines)
+                {
+                    if (Room == msgSplit[1])
+                    {
+                        SendMessageToClient("That name is used.", id);
+                        break;
+                    }
+                }
+                SendMessageToClient("Room Created", id);
+                break;
+            case "Join":
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void SigninAndSignUp(string msg, int id)
+    {
         var path = Directory.GetCurrentDirectory();
         string[] lines = System.IO.File.ReadAllLines(path + @"/UserData.txt");
         string[] msgSplit = msg.Split(',');
@@ -122,7 +160,6 @@ public class NetworkServer : MonoBehaviour
                 }
                 break;
             default:
-                Debug.Log("Nothing");
                 break;
         }
     }
