@@ -6,6 +6,19 @@ using UnityEngine.Networking;
 using System.IO;
 using UnityEngine.UI;
 
+public struct GameRoom
+{
+    public GameRoom(string pname, int ID1, int ID2) 
+    {
+        name = pname;
+        opponent1ID = ID1;
+        opponent2ID = ID2;
+    }
+    public string name;
+    public int opponent1ID;
+    public int opponent2ID;
+}
+
 public class NetworkServer : MonoBehaviour
 {
     int maxConnections = 1000;
@@ -14,10 +27,12 @@ public class NetworkServer : MonoBehaviour
     int hostID;
     int socketPort = 5491;
     string stateIn = "";
+    public List<GameRoom> GameRooms;
 
     // Start is called before the first frame update
     void Start()
     {
+        GameRooms = new List<GameRoom>();
         NetworkTransport.Init();
         ConnectionConfig config = new ConnectionConfig();
         reliableChannelID = config.AddChannel(QosType.Reliable);
@@ -69,40 +84,65 @@ public class NetworkServer : MonoBehaviour
     {
         Debug.Log("msg recieved = " + msg + ".  connection id = " + id);
         string[] msgSplit = msg.Split(',');
-        if (msgSplit[0] == "Create" || msgSplit[0] == "join")
+        switch (msgSplit[0])
         {
-            CreateAndJoinRooms(msg, id);
-        }
-        else
-        {
-            SigninAndSignUp(msg, id);
+            case "Create":
+                CreateAndJoinRooms(msg, id);
+                break;
+            case "Join":
+                CreateAndJoinRooms(msg, id);
+                break;
+            case "Leave":
+                CreateAndJoinRooms(msg, id);
+                break;
+            case "PlayTile":
+                UpdateGame(msg, id);
+                break;
+            default:
+                SigninAndSignUp(msg, id);
+                break;
         }
     }
 
     private void CreateAndJoinRooms(string msg, int id)
     {
-        var path = Directory.GetCurrentDirectory();
-        string[] lines = System.IO.File.ReadAllLines(path + @"/RoomData.txt");
         string[] msgSplit = msg.Split(',');
-
         switch (msgSplit[0])
         {
             case "Create":
-                foreach (string Room in lines)
                 {
-                    if (Room == msgSplit[1])
+                    if ((GameRooms.Find((GameRoom Room) => Room.name == msgSplit[1])).name == null)
                     {
-                        SendMessageToClient("That name is used.", id);
+                        GameRooms.Add(new GameRoom(msgSplit[1], id, 0));
+                        SendMessageToClient("Room Created", id);
                         break;
                     }
+                    SendMessageToClient("That name is used.", id);
+                    break;
                 }
-                SendMessageToClient("Room Created", id);
-                break;
             case "Join":
+                if ((GameRooms.Find((GameRoom Room) => Room.name == msgSplit[1])).name != null)
+                {
+                    UpdateGameRooms(msgSplit[1], id);
+                    SendMessageToClient("Joined", id);
+                    break;
+                }
+                SendMessageToClient("Cant Join Room", id);
+                break;
+            case "Leave":
+                LeaveRoom(msgSplit[1], id);
+                SendMessageToClient("Leave", id);
                 break;
             default:
                 break;
         }
+    }
+
+    private void UpdateGame(string msg, int id)
+    {
+        string[] msgSplit = msg.Split(',');
+        GameRoom room = GameRooms.Find((GameRoom Room) => Room.opponent1ID == id || Room.opponent2ID == id);
+        SendMessageToClient("Opponent," + msgSplit[2], (room.opponent1ID == id) ? room.opponent2ID : room.opponent1ID);
     }
 
     private void SigninAndSignUp(string msg, int id)
@@ -120,21 +160,17 @@ public class NetworkServer : MonoBehaviour
                 {
                     string[] temp = Accounts.Split(',');
                     string Username = temp[0];
-                    if (Username == msgSplit[2])
+                    if (Username == msgSplit[1])
                     {
                         SendMessageToClient("Username is already used", id);
-                        break;
-                    }
-                    else
-                    {
-                        StreamWriter File = new StreamWriter("UserData.txt", true);
-                        File.WriteLine(UserData);
-                        File.Close();
-                        Debug.Log("Signing in...");
-                        SendMessageToClient("Account Created", id);
-                        break;
+                        return;
                     }
                 }
+                StreamWriter File = new StreamWriter("UserData.txt", true);
+                File.WriteLine(UserData);
+                File.Close();
+                Debug.Log("Signing in...");
+                SendMessageToClient("Account Created", id);
                 break;
             case "Login":
                 foreach (string Login in lines)
@@ -179,4 +215,39 @@ public class NetworkServer : MonoBehaviour
         }
     }
 
+    private void ChangePlayerCount(string NewLine, int OldLine, string FileName)
+    {
+        string[] arrLine = File.ReadAllLines(FileName);
+        arrLine[OldLine - 1] = NewLine;
+        File.WriteAllLines(FileName, arrLine);
+    }
+
+    private void UpdateGameRooms(string GameRoomName, int NewID)
+    {
+        GameRoom room = GameRooms.Find((GameRoom Room) => Room.name == GameRoomName);
+        GameRooms.Remove(room);
+        if (room.opponent1ID == 0)
+        {
+            room.opponent1ID = NewID;
+        }
+        else if (room.opponent2ID == 0)
+        {
+            room.opponent2ID = NewID;
+        }
+    }
+
+    private void LeaveRoom(string GameRoomName, int ID)
+    {
+        GameRoom room = GameRooms.Find((GameRoom Room) => Room.opponent1ID == ID || Room.opponent2ID == ID);
+        GameRooms.Remove(room);
+        if (room.opponent1ID == ID)
+        {
+            room.opponent1ID = 0;
+        }
+        else if (room.opponent2ID == ID)
+        {
+            room.opponent2ID = 0;
+        }
+        GameRooms.Add(room);
+    }
 }
