@@ -6,17 +6,28 @@ using UnityEngine.Networking;
 using System.IO;
 using UnityEngine.UI;
 
+public struct Player
+{
+    public int ID;
+    public bool IsPlayersTurn;
+}
+
+
 public struct GameRoom
 {
-    public GameRoom(string pname, int ID1, int ID2) 
+    public GameRoom(string pname, int ID1 = 0, int ID2 = 0) 
     {
         name = pname;
-        opponent1ID = ID1;
-        opponent2ID = ID2;
+        PlayerX.ID = ID1;
+        PlayerO.ID = ID2;
+        PlayerX.IsPlayersTurn = true;
+        PlayerO.IsPlayersTurn = false;
+        GameState = null;
     }
     public string name;
-    public int opponent1ID;
-    public int opponent2ID;
+    public Player PlayerX;
+    public Player PlayerO;
+    public string GameState;
 }
 
 public class NetworkServer : MonoBehaviour
@@ -44,7 +55,7 @@ public class NetworkServer : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-
+        Debug.Log(GameRooms.Count);
         int recHostID;
         int recConnectionID;
         int recChannelID;
@@ -96,6 +107,10 @@ public class NetworkServer : MonoBehaviour
                 CreateAndJoinRooms(msg, id);
                 break;
             case "PlayTile":
+                PlayTile(msg, id);
+                SwapTurns(msgSplit[1]);
+                break;
+            case "Update Game":
                 UpdateGame(msg, id);
                 break;
             default:
@@ -125,6 +140,7 @@ public class NetworkServer : MonoBehaviour
                 {
                     UpdateGameRooms(msgSplit[1], id);
                     SendMessageToClient("Joined", id);
+                    UpdateGame("PlayTile," + (GameRooms.Find((GameRoom Room) => Room.name == msgSplit[1])).name, id);
                     break;
                 }
                 SendMessageToClient("Cant Join Room", id);
@@ -138,13 +154,32 @@ public class NetworkServer : MonoBehaviour
         }
     }
 
-    private void UpdateGame(string msg, int id)
+    private void PlayTile(string msg, int id)
     {
+        Debug.Log(msg);
         string[] msgSplit = msg.Split(',');
-        GameRoom room = GameRooms.Find((GameRoom Room) => Room.opponent1ID == id || Room.opponent2ID == id);
-        SendMessageToClient("Opponent," + msgSplit[2], (room.opponent1ID == id) ? room.opponent2ID : room.opponent1ID);
+        GameRoom room = GameRooms.Find((GameRoom Room) => Room.PlayerX.ID == id || Room.PlayerO.ID == id);
+        GameRooms.Remove(room);
+        room.GameState = msgSplit[2];
+        GameRooms.Add(room);
+        SendMessageToClient("Opponent," + msgSplit[2], room.PlayerX.ID);
+        SendMessageToClient("Opponent," + msgSplit[2], room.PlayerO.ID);
+        SendMessageToClient("Is player turn", ((room.PlayerX.IsPlayersTurn)) ? room.PlayerX.ID : room.PlayerO.ID);
     }
 
+    private void UpdateGame(string msg, int id)
+    {
+        Debug.Log(msg);
+        string[] msgSplit = msg.Split(',');
+        GameRoom room = GameRooms.Find((GameRoom Room) => Room.PlayerX.ID == id || Room.PlayerO.ID == id);
+        SendMessageToClient("Opponent," + room.GameState, room.PlayerX.ID);
+        SendMessageToClient("Opponent," + room.GameState, room.PlayerO.ID);
+        if (room.PlayerX.ID > 0 && room.PlayerO.ID > 0)
+        {
+            SendMessageToClient("Is player turn", ((room.PlayerX.IsPlayersTurn)) ? room.PlayerX.ID : room.PlayerO.ID);
+            SwapTurns(room.name);
+        }
+    }
     private void SigninAndSignUp(string msg, int id)
     {
         var path = Directory.GetCurrentDirectory();
@@ -215,39 +250,43 @@ public class NetworkServer : MonoBehaviour
         }
     }
 
-    private void ChangePlayerCount(string NewLine, int OldLine, string FileName)
-    {
-        string[] arrLine = File.ReadAllLines(FileName);
-        arrLine[OldLine - 1] = NewLine;
-        File.WriteAllLines(FileName, arrLine);
-    }
-
     private void UpdateGameRooms(string GameRoomName, int NewID)
     {
         GameRoom room = GameRooms.Find((GameRoom Room) => Room.name == GameRoomName);
         GameRooms.Remove(room);
-        if (room.opponent1ID == 0)
+        if (room.PlayerX.ID == 0)
         {
-            room.opponent1ID = NewID;
+            room.PlayerX.ID = NewID;
         }
-        else if (room.opponent2ID == 0)
+        else if (room.PlayerO.ID == 0)
         {
-            room.opponent2ID = NewID;
+            room.PlayerO.ID = NewID;
         }
+        GameRooms.Add(room);
     }
 
     private void LeaveRoom(string GameRoomName, int ID)
     {
-        GameRoom room = GameRooms.Find((GameRoom Room) => Room.opponent1ID == ID || Room.opponent2ID == ID);
+        GameRoom room = GameRooms.Find((GameRoom Room) => Room.PlayerX.ID == ID || Room.PlayerO.ID == ID);
         GameRooms.Remove(room);
-        if (room.opponent1ID == ID)
+        if (room.PlayerX.ID == ID)
         {
-            room.opponent1ID = 0;
+            room.PlayerX.ID = 0;
         }
-        else if (room.opponent2ID == ID)
+        else if (room.PlayerO.ID == ID)
         {
-            room.opponent2ID = 0;
+            room.PlayerO.ID = 0;
         }
         GameRooms.Add(room);
     }
+
+    private void SwapTurns(string name)
+    {
+        GameRoom room = GameRooms.Find((GameRoom Room) => Room.name == name);
+        GameRooms.Remove(room);
+        room.PlayerX.IsPlayersTurn = !room.PlayerX.IsPlayersTurn;
+        room.PlayerO.IsPlayersTurn = !room.PlayerO.IsPlayersTurn;
+        GameRooms.Add(room);
+    }
+
 }
