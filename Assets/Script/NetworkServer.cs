@@ -108,10 +108,12 @@ public class NetworkServer : MonoBehaviour
                 break;
             case "PlayTile":
                 PlayTile(msg, id);
-                SwapTurns(msgSplit[1]);
                 break;
             case "Update Game":
                 UpdateGame(msg, id);
+                break;
+            case "Won":
+                PlayerLost(msg, id);
                 break;
             default:
                 SigninAndSignUp(msg, id);
@@ -147,11 +149,18 @@ public class NetworkServer : MonoBehaviour
                 break;
             case "Leave":
                 LeaveRoom(msgSplit[1], id);
-                SendMessageToClient("Leave", id);
                 break;
             default:
                 break;
         }
+    }
+
+    private void PlayerLost(string msg, int id)
+    {
+        Debug.Log(msg);
+        string[] msgSplit = msg.Split(',');
+        GameRoom room = GameRooms.Find((GameRoom Room) => Room.PlayerX.ID == id || Room.PlayerO.ID == id);
+        SendMessageToClient("Player Lost", (room.PlayerX.ID == id) ? room.PlayerO.ID : room.PlayerX.ID);
     }
 
     private void PlayTile(string msg, int id)
@@ -164,7 +173,11 @@ public class NetworkServer : MonoBehaviour
         GameRooms.Add(room);
         SendMessageToClient("Opponent," + msgSplit[2], room.PlayerX.ID);
         SendMessageToClient("Opponent," + msgSplit[2], room.PlayerO.ID);
-        SendMessageToClient("Is player turn", ((room.PlayerX.IsPlayersTurn)) ? room.PlayerX.ID : room.PlayerO.ID);
+        if (room.PlayerX.ID > 0 && room.PlayerO.ID > 0)
+        {
+            SendMessageToClient("Is player turn", ((room.PlayerX.IsPlayersTurn)) ? room.PlayerX.ID : room.PlayerO.ID);
+            SwapTurns(msgSplit[1]);
+        }
     }
 
     private void UpdateGame(string msg, int id)
@@ -269,15 +282,16 @@ public class NetworkServer : MonoBehaviour
     {
         GameRoom room = GameRooms.Find((GameRoom Room) => Room.PlayerX.ID == ID || Room.PlayerO.ID == ID);
         GameRooms.Remove(room);
-        if (room.PlayerX.ID == ID)
+        if (room.PlayerX.ID > 0 && room.PlayerO.ID > 0)
         {
-            room.PlayerX.ID = 0;
+            SendMessageToClient("Player Lost", ID);
+            SendMessageToClient("Player Won", (room.PlayerX.ID == ID) ? room.PlayerO.ID : room.PlayerX.ID);
+            return;
         }
-        else if (room.PlayerO.ID == ID)
+        if (room.PlayerX.ID == 0 || room.PlayerO.ID == 0)
         {
-            room.PlayerO.ID = 0;
+            SendMessageToClient("Leave", ID);
         }
-        GameRooms.Add(room);
     }
 
     private void SwapTurns(string name)
